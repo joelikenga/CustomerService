@@ -1,4 +1,4 @@
-import  { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import "./App.css";
 import { Headset, Mic, Send } from "lucide-react";
@@ -88,10 +88,7 @@ function useMicrophoneLevel(active: boolean) {
   return { level, granted };
 }
 
-export function adjustColor(
-  hex: string,
-  percent: number
-): string {
+export function adjustColor(hex: string, percent: number): string {
   // Remove #
   hex = hex.replace(/^#/, "");
 
@@ -111,12 +108,7 @@ export function adjustColor(
   g = Math.min(255, Math.max(0, g + amount));
   b = Math.min(255, Math.max(0, b + amount));
 
-  return (
-    "#" +
-    ((1 << 24) + (r << 16) + (g << 8) + b)
-      .toString(16)
-      .slice(1)
-  );
+  return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
 function IconChat() {
@@ -133,6 +125,13 @@ function IconChat() {
   );
 }
 
+/* BUSINESS CONTEXT (default) */
+const BUSINESS_CONTEXT = `
+You are a customer care assistant for this business.
+Answer clearly, politely, and concisely.
+If you don't know something, say so.
+`;
+
 function ChatWidget({
   position = "center",
   iconPosition = "right",
@@ -142,7 +141,9 @@ function ChatWidget({
   fontFamily = "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto",
   bgStyle = "linear-gradient(135deg, rgba(20,25,40,0.6), rgba(20,15,30,0.45))",
   firstMessage = "Hello! I'm your AI assistant. How can I help today?",
-  primaryColor , // new prop: affects send button and initiating icon
+  primaryColor = "#7C3AED",
+  businessContext, 
+  overlay = true, 
 }: {
   position?: Position;
   iconPosition?: IconPos;
@@ -152,7 +153,9 @@ function ChatWidget({
   fontFamily?: string;
   bgStyle?: string;
   firstMessage?: string;
-  primaryColor: string;
+  primaryColor?: string;
+  businessContext?: string;
+  overlay?: boolean;
 }) {
   const [showBackdrop, setShowBackdrop] = useState(false);
   const [showWidget, setShowWidget] = useState(false);
@@ -183,12 +186,87 @@ function ChatWidget({
       ? "right-6 bottom-8"
       : "left-1/2 transform -translate-x-1/2 bottom-8";
 
+  // STEP 1: Message type and messages state (persisted to localStorage)
+  type Message = { role: "user" | "assistant"; content: string };
+
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = localStorage.getItem("chat_messages");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // STEP 3: Persist messages to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("chat_messages", JSON.stringify(messages));
+    } catch {
+      // ignore
+    }
+  }, [messages]);
+
+  // sentinel ref to keep chat scrolled to latest message
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // scroll to bottom when messages change or widget opens
+  useEffect(() => {
+    if (!showWidget) return;
+    const t = window.setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, 50);
+    return () => clearTimeout(t);
+  }, [messages, showWidget]);
+  
   useEffect(() => {
     if (showWidget) {
       // small auto-focus on open
       setTimeout(() => inputRef.current?.focus(), 200);
     }
   }, [showWidget]);
+
+  // STEP 5: Build prompt helper
+  function buildPrompt(context: string, history: Message[], userInput: string) {
+    let prompt = context + "\n\nConversation:\n";
+    history.forEach((m) => {
+      prompt += `${m.role.toUpperCase()}: ${m.content}\n`;
+    });
+    prompt += `USER: ${userInput}\nASSISTANT:`;
+    return prompt;
+  }
+
+  // STEP 6: Call backend and update messages
+  async function sendMessage(userInput: string) {
+    const userMessage: Message = { role: "user", content: userInput };
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+
+    const prompt = buildPrompt(
+      businessContext ?? BUSINESS_CONTEXT,
+      updatedMessages,
+      userInput
+    );
+
+    try {
+      const res = await fetch("http://localhost:8080/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await res.json();
+      const aiMessage: Message = {
+        role: "assistant",
+        content: data.answer ?? "Sorry, no answer.",
+      };
+      setMessages((prev) => [...prev, aiMessage]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Sorry, something went wrong." },
+      ]);
+    }
+  }
 
   return (
     <>
@@ -207,38 +285,48 @@ function ChatWidget({
           >
             <div
               className="w-10 h-10 hidden lg:flex items-center justify-center cursor-pointer"
-              style={{ color: primaryColor,fontSize: 20  }} // icon stroke uses currentColor
+              style={{ color: primaryColor, fontSize: 20 }} // icon stroke uses currentColor
             >
-              {showWidget ? <span style={{ fontSize: 20 }}>✕</span> : <div><IconChat /></div>}
+              {showWidget ? (
+                <span style={{ fontSize: 20 }}>✕</span>
+              ) : (
+                <div>
+                  <IconChat />
+                </div>
+              )}
             </div>
           </button>
         </div>
       )}
 
       {/* backdrop (animated) and widget (animated after backdrop) */}
-      <div className={`fixed inset-0 pointer-events-none`}>
-        <AnimatePresence>
-          {showBackdrop && (
-            <motion.div
-              initial={{ y: 40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 40, opacity: 0 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              className="fixed inset-0 z-999998 pointer-events-auto flex items-center justify-center"
-            >
-              <div
-                className="min-h-screen w-full h-full flex items-center justify-center p-6"
-                style={{
-                  // runtime gradient using primaryColor (Tailwind cannot handle dynamic classes)
-                  background: `linear-gradient(180deg, rgba(248,250,252,0.92) 0%, ${adjustColor(primaryColor, 0)} 100%)`,
-                  color: "white",
-                  backdropFilter: "blur(8px)",
-                }}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      {overlay && (
+        <div className={`fixed inset-0 pointer-events-none`}>
+          <AnimatePresence>
+            {showBackdrop && (
+              <motion.div
+                initial={{ y: 40, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 40, opacity: 0 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
+                className="fixed inset-0 z-999998 pointer-events-auto flex items-center justify-center"
+              >
+                <div
+                  className="min-h-screen w-full h-full flex items-center justify-center p-6"
+                  style={{
+                    background: `linear-gradient(180deg, rgba(248,250,252,0.92) 0%, ${adjustColor(
+                      primaryColor,
+                      0
+                    )} 100%)`,
+                    color: "white",
+                    backdropFilter: "blur(8px)",
+                  }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       <div
         className={`fixed z-999999 ${containerPosClass} `}
@@ -265,7 +353,7 @@ function ChatWidget({
               <div className="px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-white/6 border border-white/8">
-                    <Headset/>
+                    <Headset />
                   </div>
                   <div>
                     <div
@@ -325,17 +413,35 @@ function ChatWidget({
 
               {/* messages / body */}
               <div className="flex-1 px-4 overflow-auto py-3 space-y-3">
-                {/* Use the configurable firstMessage prop for the initial assistant message */}
-                <div className="flex justify-start">
-                  <div className="max-w-[75%] bg-linear-to-r from-white/4 to-white/2 backdrop-blur-sm border border-white/6 rounded-tl-lg rounded-br-xl rounded-tr-lg rounded-bl-md px-4 py-3 text-sm">
-                    {firstMessage}
+                {messages.length === 0 && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[75%] bg-linear-to-r from-white/4 to-white/2 border border-white/6 rounded-xl px-4 py-3 text-sm">
+                      {firstMessage}
+                    </div>
                   </div>
-                </div>
-                <div className="flex justify-end">
-                  <div className="max-w-[70%] bg-white/8 border border-white/6 rounded-tl-xl rounded-br-lg rounded-tr-md rounded-bl-lg px-4 py-3 text-sm">
-                    I want to check an order status.
+                )}
+
+                {messages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex ${
+                      msg.role === "user" ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[75%] px-4 py-3 text-sm rounded-xl ${
+                        msg.role === "user"
+                          ? "bg-white/8 border border-white/6"
+                          : "bg-linear-to-r from-white/4 to-white/2 border border-white/6"
+                      }`}
+                    >
+                      {msg.content}
+                    </div>
                   </div>
-                </div>
+                ))}
+
+                {/* sentinel element to scroll into view for the latest message */}
+                <div ref={messagesEndRef} />
               </div>
 
               {/* footer: removed non-displayed spectrum and replaced with compact listening indicator */}
@@ -377,18 +483,30 @@ function ChatWidget({
                       ref={inputRef}
                       value={text}
                       onChange={(e) => setText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          const value = text.trim();
+                          if (!value) return;
+                          // send message to backend (sendMessage is in scope)
+                          sendMessage(value);
+                          setText("");
+                        }
+                      }}
                       placeholder="Type a message or speak..."
                       className="flex-1 px-4 py-2 rounded-lg bg-white/6 border border-white/8 placeholder:text-white/50 text-sm outline-none focus:ring-2 focus:ring-white/10 w-[80%]"
                     />
                     <button
                       onClick={() => {
-                        if (text.trim().length === 0) {
+                        const value = text.trim();
+                        if (!value) {
                           // activate quick listen if mic available
                           setListening((s) => !s);
-                        } else {
-                          // handle send
-                          setText("");
+                          return;
                         }
+                        // send message to backend
+                        sendMessage(value);
+                        setText("");
                       }}
                       aria-label={
                         text.trim().length ? "Send" : "Start/stop mic"
@@ -427,7 +545,9 @@ export default function App() {
         bgStyle={
           "linear-gradient(135deg, rgba(20,25,40,0.6), rgba(20,15,30,0.45))"
         }
-        primaryColor="#800080" 
+        primaryColor="#800080"
+        businessContext="you are a support ai"
+        // overlay={false}
       />
     </div>
   );

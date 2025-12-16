@@ -1,8 +1,9 @@
 build :
-	@go build -o bin/REST-API backend/main.go
+# 	@mkdir -p bin
+	@go build -o bin/CustomerService ./cmd/main.go
 
 test :
-	@go build -v ./...
+	@go test -v ./...
 
 run :
-	@./bin/REST-API
+	@./bin/CustomerService
