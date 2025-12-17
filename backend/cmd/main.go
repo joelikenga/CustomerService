@@ -1,12 +1,22 @@
 package main
 
 import (
+	"log"
+
 	"customerService/internal/handlers"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// load .env if present so OPENAI_API_KEY can be provided via .env during development
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file loaded (OK if you set OPENAI_API_KEY in environment)")
+	} else {
+		log.Println(".env loaded")
+	}
+
 	r := gin.Default()
 
 	// allow frontend to call backend - set CORS headers for all requests
