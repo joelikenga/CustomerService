@@ -1,3 +1,5 @@
+// server/main.go
+
 package main
 
 import (
@@ -10,16 +12,16 @@ import (
 )
 
 func main() {
-	// load .env if present so OPENAI_API_KEY can be provided via .env during development
+	// Load .env for SMTP configuration only (if needed)
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file loaded (OK if you set OPENAI_API_KEY in environment)")
+		log.Println("No .env file loaded (OK)")
 	} else {
-		log.Println(".env loaded")
+		log.Println(".env loaded for SMTP configuration")
 	}
 
 	r := gin.Default()
 
-	// allow frontend to call backend - set CORS headers for all requests
+	// CORS configuration
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
@@ -31,7 +33,6 @@ func main() {
 		c.Next()
 	})
 
-	// ensure OPTIONS preflight is handled (catch-all) — register before other routes
 	r.OPTIONS("/*path", func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
@@ -41,5 +42,7 @@ func main() {
 
 	r.POST("/chat", handlers.Chat)
 
-	r.Run(":8080") // backend runs here
+	log.Println("🚀 Backend server started on port 8080")
+	log.Println("📝 Using client-side API keys (passed via Authorization header)")
+	r.Run(":8080")
 }
