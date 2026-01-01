@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Headset,
   Mic,
   Send,
   Instagram,
@@ -14,11 +13,14 @@ import {
   Mail,
   Phone,
 } from "lucide-react";
+import { adjustColor } from "./utils/helpers";
+import { IconChat, X } from "./utils/icons";
+import { useMicrophoneLevel } from "./hooks/useMicrophone";
 
 // Types
-type Position = "left" | "center" | "right";
-type IconPos = "left" | "right";
-type SocialPlatform =
+export type Position = "left" | "center" | "right";
+export type IconPos = "left" | "right";
+export type SocialPlatform =
   | "instagram"
   | "facebook"
   | "twitter"
@@ -27,18 +29,18 @@ type SocialPlatform =
   | "email"
   | "phone";
 
-type SocialLink = {
+export type SocialLink = {
   platform: SocialPlatform;
   url: string;
 };
 
-type Message = {
+export type Message = {
   role: "user" | "assistant" | "social";
   content: string;
   showSocials?: boolean;
 };
 
-type ChatOptions = {
+export type ChatOptions = {
   position?: Position;
   iconPosition?: IconPos;
   aiName?: string;
@@ -53,107 +55,8 @@ type ChatOptions = {
   developerEmail?: string;
   apiKey?: string;
   socialLinks?: SocialLink[];
+  className?: string;
 };
-
-// Helpers
-export function adjustColor(hex: string, percent: number): string {
-  hex = hex.replace(/^#/, "");
-  if (hex.length !== 6) return hex;
-  const num = Number.parseInt(hex, 16);
-  let r = (num >> 16) & 0xff;
-  let g = (num >> 8) & 0xff;
-  let b = num & 0xff;
-  const amount = Math.round(255 * (percent / 100));
-  r = Math.min(255, Math.max(0, r + amount));
-  g = Math.min(255, Math.max(0, g + amount));
-  b = Math.min(255, Math.max(0, b + amount));
-  return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
-}
-
-function IconChat() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M21 15a4 4 0 01-4 4H8l-5 3V6a4 4 0 014-4h10a4 4 0 014 4z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      ></path>
-    </svg>
-  );
-}
-
-// Hooks
-function useMicrophoneLevel(active: boolean) {
-  const [level, setLevel] = useState(0);
-  const [granted, setGranted] = useState(false);
-  const audioRef = useRef<MediaStream | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataArrayRef = useRef<Uint8Array | null>(null);
-
-  useEffect(() => {
-    let ctx: AudioContext | null = null;
-
-    if (!active) {
-      if (audioRef.current) {
-        audioRef.current.getTracks().forEach((t) => t.stop());
-        audioRef.current = null;
-      }
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-      setLevel(0);
-      return;
-    }
-
-    navigator.mediaDevices
-      .getUserMedia({ audio: true, video: false })
-      .then((stream) => {
-        setGranted(true);
-        audioRef.current = stream;
-        ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const source = ctx.createMediaStreamSource(stream);
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 256;
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        analyserRef.current = analyser;
-        dataArrayRef.current = dataArray;
-        source.connect(analyser);
-
-        const tick = () => {
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            const v = dataArray[i] / 255;
-            sum += v * v;
-          }
-          const rms = Math.sqrt(sum / dataArray.length);
-          setLevel((prev) => prev * 0.7 + rms * 0.3);
-          rafRef.current = requestAnimationFrame(tick);
-        };
-        tick();
-      })
-      .catch(() => setGranted(false));
-
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.getTracks().forEach((t) => t.stop());
-        audioRef.current = null;
-      }
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-      if (ctx) ctx.close();
-    };
-  }, [active]);
-
-  return { level, granted };
-}
 
 const BUSINESS_CONTEXT = `
 You are a customer care assistant for this business.
@@ -161,7 +64,9 @@ Answer clearly, politely, and concisely.
 If you don't know something, say so.
 `;
 
-function ChatWidget({ opts }: { opts?: ChatOptions }) {
+const API_ENDPOINT = "http://localhost:8080/chat";
+
+export function ChatWidget({ opts }: { opts?: ChatOptions }) {
   const defaultOpts: Required<ChatOptions> = {
     position: "center",
     iconPosition: "right",
@@ -178,6 +83,7 @@ function ChatWidget({ opts }: { opts?: ChatOptions }) {
     developerEmail: "",
     apiKey: "",
     socialLinks: [],
+    className: "",
   };
   const options = { ...defaultOpts, ...(opts || {}) };
   const {
@@ -195,6 +101,7 @@ function ChatWidget({ opts }: { opts?: ChatOptions }) {
     developerEmail,
     apiKey,
     socialLinks,
+    className,
   } = options;
 
   const resolvedTextColor =
@@ -226,7 +133,7 @@ function ChatWidget({ opts }: { opts?: ChatOptions }) {
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [showSocialLinks, setShowSocialLinks] = useState(false);
 
-  const { level, granted } = useMicrophoneLevel(listening && isVoiceMode);
+  const { level } = useMicrophoneLevel(listening && isVoiceMode);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -466,7 +373,7 @@ function ChatWidget({ opts }: { opts?: ChatOptions }) {
       const headers: any = { "Content-Type": "application/json" };
       if (apiKey?.trim()) headers["Authorization"] = `Bearer ${apiKey.trim()}`;
 
-      const res = await fetch("http://localhost:8080/chat", {
+      const res = await fetch(API_ENDPOINT, {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -693,6 +600,7 @@ function ChatWidget({ opts }: { opts?: ChatOptions }) {
                 transition:
                   "background 0.3s ease, width 0.4s ease, max-height 0.4s ease",
               }}
+              className={className}
             >
               {/* Header */}
               <div
@@ -723,7 +631,7 @@ function ChatWidget({ opts }: { opts?: ChatOptions }) {
                     }}
                   >
                     {isVoiceMode ? (
-                      <Headset size={20} />
+                      <Mic size={20} />
                     ) : (
                       <MessageCircle size={18} />
                     )}
@@ -834,7 +742,7 @@ function ChatWidget({ opts }: { opts?: ChatOptions }) {
                         }}
                       >
                         Hello, I'm {aiName},{" "}
-                        {firstMessage.replace(/^hello[,.! ]*/i, "")}
+                        {firstMessage!.replace(/^hello[,.! ]*/i, "")}
                       </div>
                     </div>
                     {messages.map((msg, idx) => (
@@ -871,7 +779,7 @@ function ChatWidget({ opts }: { opts?: ChatOptions }) {
                     )}
 
                     {/* Social Links Section (only shown when showSocialLinks is true) */}
-                    {showSocialLinks && socialLinks.length > 0 && (
+                    {showSocialLinks && socialLinks!.length > 0 && (
                       <div
                         style={{
                           marginTop: "1rem",
@@ -895,7 +803,7 @@ function ChatWidget({ opts }: { opts?: ChatOptions }) {
                             gap: "0.5rem",
                           }}
                         >
-                          {socialLinks.map((link, idx) => (
+                          {socialLinks!.map((link, idx) => (
                             <a
                               key={idx}
                               href={link.url}
@@ -1076,56 +984,5 @@ function ChatWidget({ opts }: { opts?: ChatOptions }) {
         </AnimatePresence>
       </div>
     </>
-  );
-}
-
-export default function Page() {
-  return (
-    <div>
-      <ChatWidget
-        opts={{
-          position: "center",
-          iconPosition: "right",
-          aiName: "Jay - AI",
-          subtitle: "Ask anything ...",
-          textColor: "white",
-          fontFamily: "Inter, ui-sans-serif, system-ui",
-          bgStyle:
-            "linear-gradient(135deg, rgba(20,25,40,0.6), rgba(20,15,30,0.45))",
-          primaryColor: "#800080",
-          businessContext:
-            "You are a helpful AI assistant. Answer questions clearly and concisely.",
-          overlay: true,
-          developerEmail: "developer@example.com",
-          apiKey: (import.meta.env.VITE_OPENAI_API_KEY as string) || "",
-          firstMessage: "How can I assist you today?",
-          socialLinks: [
-            { platform: "instagram", url: "https://instagram.com/yourcompany" },
-            { platform: "facebook", url: "https://facebook.com/yourcompany" },
-            { platform: "twitter", url: "https://twitter.com/yourcompany" },
-            { platform: "whatsapp", url: "https://wa.me/1234567890" },
-            { platform: "email", url: "mailto:support@yourcompany.com" },
-            { platform: "phone", url: "tel:+1234567890" },
-          ],
-        }}
-      />
-    </div>
-  );
-}
-
-function X({ size }: { size: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M18 6L6 18M6 6l12 12" />
-    </svg>
   );
 }
