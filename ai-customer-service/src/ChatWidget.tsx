@@ -56,6 +56,7 @@ export type ChatOptions = {
   apiKey?: string;
   socialLinks?: SocialLink[];
   className?: string;
+  voiceRate?: number;
 };
 
 const BUSINESS_CONTEXT = `
@@ -84,6 +85,7 @@ export function ChatWidget({ opts }: { opts?: ChatOptions }) {
     apiKey: "",
     socialLinks: [],
     className: "",
+    voiceRate: 0.9,
   };
   const options = { ...defaultOpts, ...(opts || {}) };
   const {
@@ -102,6 +104,7 @@ export function ChatWidget({ opts }: { opts?: ChatOptions }) {
     apiKey,
     socialLinks,
     className,
+    voiceRate,
   } = options;
 
   const resolvedTextColor =
@@ -202,6 +205,7 @@ export function ChatWidget({ opts }: { opts?: ChatOptions }) {
       }
 
       const utterance = new SpeechSynthesisUtterance(chunks[index]);
+      utterance.rate = voiceRate;
       utterance.onstart = () => setAiIsSpeaking(true);
       utterance.onend = () => {
         // Speak next chunk
@@ -871,6 +875,9 @@ export function ChatWidget({ opts }: { opts?: ChatOptions }) {
                       style={{
                         width: "2.75rem",
                         height: "2.75rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
                         borderRadius: "0.5rem",
                         background: primaryColor,
                         color: "white",
