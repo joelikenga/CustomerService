@@ -1,5 +1,5 @@
 {
-  "name": "ai-customer-service",
+  "name": "customer-service-ai",
   "version": "0.1.2",
   "description": "A reusable AI customer service chat widget",
   "main": "./dist/index.js",
