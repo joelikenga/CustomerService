@@ -2,8 +2,6 @@
 
 A beautiful, customizable, and voice-enabled React chat widget for generic AI customer support. Built with modern web technologies including React, Framer Motion, and Tailwind CSS styles.
 
-![Chat Widget Preview](https://via.placeholder.com/800x400?text=Chat+Widget+Preview)
-
 ## Features
 
 - 🎙️ **Voice Mode**: Full speech-to-text and text-to-speech support for hands-free interaction.
