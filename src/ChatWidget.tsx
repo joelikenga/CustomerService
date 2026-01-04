@@ -65,7 +65,7 @@ Answer clearly, politely, and concisely.
 If you don't know something, say so.
 `;
 
-const API_ENDPOINT = "http://localhost:8080/chat";
+const API_ENDPOINT = "https://customerservice-ai-backend.onrender.com/chat";
 
 export function ChatWidget({ opts }: { opts?: ChatOptions }) {
   const defaultOpts: Required<ChatOptions> = {
