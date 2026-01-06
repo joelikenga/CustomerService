@@ -1,6 +1,6 @@
 {
   "name": "customer-service-ai",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A reusable AI customer service chat widget",
   "repository": {
     "type": "git",
