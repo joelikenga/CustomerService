@@ -96,36 +96,7 @@ socialLinks: socialLinks
 
 Supported platforms: `"instagram"`, `"facebook"`, `"twitter"`, `"linkedin"`, `"whatsapp"`, `"email"`, `"phone"`.
 
-## API Integration
 
-The widget sends a POST request to your `apiEndpoint` with the following JSON body:
-
-```json
-{
-  "prompt": "System Context...\nConversation History...\nUSER: [Input]\nASSISTANT:",
-  "developer_email": "optional-email@example.com"
-}
-```
-
-### Expected Response
-
-Your backend should respond with:
-
-```json
-{
-  "answer": "The AI's response text here.",
-  "show_socials": false // optional boolean to trigger social links display
-}
-```
-
-If an error occurs, the widget expects:
-
-```json
-{
-  "error": "Error message description",
-  "show_socials": true // optionally show socials on error
-}
-```
 
 ## Voice Mode 🎙️
 
